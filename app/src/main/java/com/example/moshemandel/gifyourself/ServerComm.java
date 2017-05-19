@@ -10,9 +10,13 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
@@ -28,9 +32,12 @@ import okhttp3.Response;
  * Created by moshemandel on 18/05/2017.
  */
 
+
 class ServerComm extends AsyncTask<String, Void, String> {
     Context mContext;
     View mRootView;
+
+
     private ProgressBar spinner;
 
     private static final String TAG = "ServerComm";
@@ -65,10 +72,10 @@ class ServerComm extends AsyncTask<String, Void, String> {
     private String execPost(String imagePath) throws IOException {
         final MediaType MEDIA_TYPE_JPG = MediaType.parse("image/jpeg");
         File origFile = new File(imagePath);
-        String origFileSize = String.valueOf(origFile.length()/1024);
+        String origFileSize = String.valueOf(origFile.length() / 1024);
 //        String compressedImagePath = compressImage(imagePath);
         File inputFile = new File(imagePath);
-        String newFileSize = String.valueOf(origFile.length()/1024);
+        String newFileSize = String.valueOf(origFile.length() / 1024);
         Log.d("ServerComm", origFileSize + ", " + newFileSize);
         Request request = null;
         Response response = null;
@@ -78,6 +85,8 @@ class ServerComm extends AsyncTask<String, Void, String> {
                 .connectTimeout(1200, TimeUnit.SECONDS)
                 .writeTimeout(1200, TimeUnit.SECONDS)
                 .readTimeout(1200, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+
                 .build();
 
 
@@ -89,12 +98,28 @@ class ServerComm extends AsyncTask<String, Void, String> {
                     .build();
 
             request = new Request.Builder()
-                    .url("http://45.58.49.173:8000")
+                    .url("http://132.65.120.155:8000")
                     .post(requestBody)
                     .build();
 
             response = client.newCall(request).execute();
-            Log.d("ServerComm", response.toString() );
+            Log.d("ServerComm", response.toString());
+            InputStream is = response.body().byteStream();
+            BufferedInputStream input = new BufferedInputStream(is);
+            OutputStream output = new FileOutputStream(createGifFile());
+            byte[] data = new byte[1024];
+
+            long total = 0;
+            int count;
+            while ((count = input.read(data)) != -1) {
+                total += count;
+                output.write(data, 0, count);
+            }
+
+            output.flush();
+            output.close();
+            input.close();
+
         } catch (Exception e) {
             response = client.newCall(request).execute();
 
@@ -124,8 +149,8 @@ class ServerComm extends AsyncTask<String, Void, String> {
     }
 
     private String compressImage(String path) {
-        File dir=Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
-        Bitmap b= BitmapFactory.decodeFile(path);
+        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM);
+        Bitmap b = BitmapFactory.decodeFile(path);
         Bitmap out = Bitmap.createScaledBitmap(b, 320, 480, false);
         File file = new File(dir, "resize.png");
         FileOutputStream fOut;
@@ -136,7 +161,8 @@ class ServerComm extends AsyncTask<String, Void, String> {
             fOut.close();
             b.recycle();
             out.recycle();
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
         return file.getAbsolutePath();
     }
 
@@ -168,7 +194,7 @@ class ServerComm extends AsyncTask<String, Void, String> {
 //                urlConnection.disconnect();
 //            }
 //        }
-        // imagePath is path of new compressed image.
+    // imagePath is path of new compressed image.
 //        String attachmentName = "filedata";
 //        String attachmentFileName = "my_img.jpg";
 //        String serverIp = "45.58.49.173";
@@ -351,5 +377,18 @@ class ServerComm extends AsyncTask<String, Void, String> {
         return gifPath;
     }
 
+    private File createGifFile() throws IOException {
+        // Create an image file name
+        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String imageFileName = "GIF_" + timeStamp + "_";
+        File storageDir = mContext.getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+        File image = File.createTempFile(
+                imageFileName,  /* prefix */
+                ".gif",         /* suffix */
+                storageDir      /* directory */
+        );
+
+        return image;
+    }
 
 }
